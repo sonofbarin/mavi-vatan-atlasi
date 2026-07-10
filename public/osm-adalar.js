@@ -50,6 +50,7 @@
         FIR.alanlar = j.features.map((f) => ({ p: f.properties, h: halkalariAl(f.geometry) }));
         FIR.yuklendi = true;
         console.log(`FIR: ${FIR.alanlar.length} poligon (gerçek ICAO sınırı)`);
+        bildir(`Gerçek ICAO FIR sınırları yüklendi (${FIR.alanlar.length} bölge) — Havacılık katmanından açın`);
       }
     } catch (e) {}
 
@@ -83,7 +84,7 @@
         m: "VATSpy Data Project'ten alınan, AIRAC döngüsüyle güncellenen resmî FIR poligonları: Atina (LGGG), İstanbul (LTBB), Ankara (LTAA), Lefkoşa (LCCC). Atlasın elle çizilmiş temsilî hatlarının yerini alır. FIR uçuş bilgi bölgesidir; egemenlik sınırı değildir — devlet (askerî) uçakları Chicago Sözleşmesi m.3 gereği ICAO planına tabi değildir.",
       };
     }
-    if (typeof panelYenile === "function") panelYenile();
+    if (typeof panelKur === "function") { panelKur(); if (typeof panelYenile === "function") panelYenile(); }
   }
 
   /* --- çizim: canliCiz zincirine takılır --- */
@@ -189,9 +190,28 @@
     const p = a.p;
     const yil = ZAMAN.yil;
     /* Egemenliği atlasın tarihsel katmanından oku */
-    let sv = null;
+    let sv = null, svKaynak = "";
     for (const pt of GEO.parts) {
       if (HARITA.poliIcinde([p.x, p.y], pt.p)) { sv = HARITA.sovKod(pt.t, yil); break; }
+    }
+    if (!sv) {
+      /* Bu adacık atlasın tarihsel katmanında yok → en yakın parçadan türet */
+      let enYakin = null, enUzak = 9e9;
+      for (const pt of GEO.parts) {
+        for (const h of pt.p) {
+          for (let i = 0; i < h.length; i += 3) {
+            const d = (h[i][0] - p.x) * (h[i][0] - p.x) * 0.62 + (h[i][1] - p.y) * (h[i][1] - p.y);
+            if (d < enUzak) { enUzak = d; enYakin = pt; }
+          }
+        }
+      }
+      if (enYakin) { sv = HARITA.sovKod(enYakin.t, yil); svKaynak = " (en yakın kıyıdan türetildi)"; }
+      /* Onikiada kuşağı: tarih çizelgesi kesin */
+      const ONIKI = p.x >= 26.15 && p.x <= 30.10 && p.y >= 35.20 && p.y <= 37.45;
+      if (ONIKI && sv && ["GR","TR","OSM","IT"].includes(sv)) {
+        const t = [[1780,"OSM"],[1912,"IT"],[1947,"GR"]];
+        sv = HARITA.sovKod(t, yil); svKaynak = " (Onikiada rejimi: 1912 İtalya → 1947 Paris m.14)";
+      }
     }
     const s = sv ? GEO.sov[sv] : null;
     const kur = DATA.adalar.find((x) => x.ad === p.ad || (p.yerel && x.gr === p.yerel));
@@ -203,13 +223,14 @@
     POP.genel(
       p.ad || "Adı OSM'de kayıtlı değil",
       `<div class="rozet-dizi">
-        ${s ? `<span class="rozet" style="color:${s.renk};border-color:${s.renk}">${yil} · ${H(s.ad)}</span>` : ""}
+        ${s ? `<span class="rozet" style="color:${s.renk};border-color:${s.renk}" title="${H(svKaynak.trim())}">${yil} · ${H(s.ad)}</span>` : ""}
         ${p.yerel && p.yerel !== p.ad ? `<span class="rozet rz-n">${H(p.yerel)}</span>` : ""}
         ${p.tur === "islet" ? `<span class="rozet rz-n">adacık</span>` : ""}
        </div>
        <div class="stat-satir"><span>Yüzölçümü</span><b>${alan}</b></div>
        ${p.en ? `<div class="stat-satir"><span>Uluslararası ad</span><b>${H(p.en)}</b></div>` : ""}
        ${p.el ? `<div class="stat-satir"><span>Yunanca</span><b>${H(p.el)}</b></div>` : ""}
+       ${svKaynak ? `<p style="font-size:11px;color:var(--soluk);margin-top:2px">Egemenlik${H(svKaynak)}</p>` : ""}
        <div class="stat-satir"><span>Koordinat</span><b>${p.y.toFixed(4)}°K ${p.x.toFixed(4)}°D</b></div>
        ${kur && kur.aciklama ? `<p style="margin-top:8px">${H(kur.aciklama)}</p>` : ""}
        ${kur ? `<button class="hk-detay" onclick="MOD.git('adalar');setTimeout(()=>{const e=document.getElementById('ada-${kur.id}');e&&e.scrollIntoView({block:'center'})},80)">Ada dosyasını aç</button>` : ""}
