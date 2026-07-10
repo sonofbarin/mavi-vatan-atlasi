@@ -46,7 +46,10 @@ def anakaralar():
     return out["TR"], out["GR"]
 
 def main():
-    fc = json.load(open("public/data/adalar.geojson", encoding="utf-8"))
+    yol = "public/data/adalar.geojson"
+    if not os.path.exists(yol):
+        raise SystemExit("adalar.geojson yok — önce 'Adaları çek' adımı en az bir kez başarılı olmalı.")
+    fc = json.load(open(yol, encoding="utf-8"))
     TRana, GRana = anakaralar()
     TRs = affinity.scale(TRana, xfact=K, yfact=1, origin=(0, 0))
     GRs = affinity.scale(GRana, xfact=K, yfact=1, origin=(0, 0))
