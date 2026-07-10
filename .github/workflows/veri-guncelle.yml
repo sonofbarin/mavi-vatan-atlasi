@@ -27,6 +27,9 @@ jobs:
       - name: Adaları çek (OpenStreetMap / Overpass)
         run: python veri/cek_adalar.py
 
+      - name: Karasularını üret (OSM adalarından)
+        run: python veri/cek_karasulari.py
+
       - name: Değişiklikleri işle
         run: |
           git config user.name  "github-actions[bot]"
