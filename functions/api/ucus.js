@@ -1,53 +1,65 @@
-// GET /api/ucus?lat=39&lon=32&r=250   → tek nokta çevresi (yarıçap deniz mili, en fazla 250)
-// GET /api/ucus?bolge=turkiye         → Türkiye'nin tamamı (3 daire, sırayla, birleştirilmiş)
-// GET /api/ucus?bolge=ege             → Ege + Doğu Akdeniz (tek daire, en hafif sorgu)
+// GET /api/ucus?bolge=ege        → Ege + Doğu Akdeniz (tek daire, en hafif)
+// GET /api/ucus?bolge=turkiye    → Türkiye'nin tamamı (3 daire)
+// GET /api/ucus?lat=..&lon=..&r= → serbest nokta (yarıçap deniz mili, en fazla 250)
 //
-// DAYANIKLILIK ZİNCİRİ
-//   1) Önbellek (20 sn taze)                          → hiç dış istek atılmaz
-//   2) adsb.lol  (anahtarsız, ODbL, filtrelenmemiş)
-//   3) OpenSky   (anonim, adsb.lol 429 verirse)
-//   4) Son iyi veri (10 dk'ya kadar, "bayat: true")
-//
-// adsb.lol gönüllü bir servis. Sorguları sıraya diziyor, önbellekliyor ve 429'a saygı gösteriyoruz.
+// KAYNAK ZİNCİRİ (hepsi ücretsiz, anahtarsız, ADSBExchange-v2 uyumlu):
+//   1) önbellek (25 sn)
+//   2) adsb.lol        → ODbL
+//   3) airplanes.live  → 1 istek/sn
+//   4) adsb.fi         → opendata
+//   5) OpenSky (anonim, farklı format)
+//   6) son iyi veri ("bayat: true")
+// Hepsi gönüllü servis: sıralı sorgu + önbellek + zaman aşımı ile nazik davranıyoruz.
 
-const UA = "MaviVatanAtlasi/1.1 (egitim amacli; github.com/sonofbarin/mavi-vatan-atlasi)";
-const TAZE_SN = 20;      // önbellek ömrü
-const BAYAT_SN = 600;    // acil durum kopyası
+const UA = "MaviVatanAtlasi/1.2 (egitim; github.com/sonofbarin/mavi-vatan-atlasi)";
+const TAZE_SN = 25;
+const BAYAT_SN = 900;
+const ZAMAN_ASIMI = 6000;
 
 const BOLGE = {
-  turkiye: [
-    { lat: 40.3, lon: 28.0, r: 250 }, // Marmara + Ege + Batı Karadeniz
-    { lat: 37.5, lon: 32.5, r: 250 }, // İç Anadolu + Akdeniz + Kıbrıs
-    { lat: 39.9, lon: 39.5, r: 250 }, // Doğu Anadolu + Doğu Karadeniz
-  ],
   ege: [{ lat: 37.8, lon: 27.2, r: 220 }],
+  turkiye: [
+    { lat: 40.3, lon: 28.0, r: 250 },
+    { lat: 37.5, lon: 32.5, r: 250 },
+    { lat: 39.9, lon: 39.5, r: 250 },
+  ],
 };
+
+const KAYNAKLAR = [
+  { ad: "adsb.lol",       url: (a, o, r) => `https://api.adsb.lol/v2/point/${a}/${o}/${r}` },
+  { ad: "airplanes.live", url: (a, o, r) => `https://api.airplanes.live/v2/point/${a}/${o}/${r}` },
+  { ad: "adsb.fi",        url: (a, o, r) => `https://opendata.adsb.fi/api/v2/lat/${a}/lon/${o}/dist/${r}` },
+];
 
 const bekle = (ms) => new Promise((r) => setTimeout(r, ms));
 const sayi = (v, d) => (Number.isFinite(parseFloat(v)) ? parseFloat(v) : d);
 
-/* ---------- adsb.lol ---------- */
-async function adsbNokta(lat, lon, r) {
-  const url = `https://api.adsb.lol/v2/point/${lat}/${lon}/${Math.min(250, Math.max(1, Math.round(r)))}`;
-  const cache = caches.default;
-  const anahtar = new Request(url);
-
-  const onbellek = await cache.match(anahtar);
-  if (onbellek) return (await onbellek.json()).ac || [];
-
-  const cevap = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" } });
-  if (cevap.status === 429) throw Object.assign(new Error("adsb-429"), { kod: 429 });
-  if (!cevap.ok) throw new Error("adsb-" + cevap.status);
-
-  const govde = await cevap.text();
-  await cache.put(anahtar, new Response(govde, {
-    headers: { "content-type": "application/json", "cache-control": `public, max-age=${TAZE_SN}` },
-  }));
-  return (JSON.parse(govde).ac) || [];
+async function getir(url) {
+  const iptal = new AbortController();
+  const zaman = setTimeout(() => iptal.abort(), ZAMAN_ASIMI);
+  try {
+    const c = await fetch(url, { headers: { "User-Agent": UA, Accept: "application/json" }, signal: iptal.signal });
+    if (!c.ok) throw new Error(c.status);
+    return await c.json();
+  } finally {
+    clearTimeout(zaman);
+  }
 }
 
-function adsbSadelestir(ham) {
-  return ham
+async function onbellekliGetir(url) {
+  const cache = caches.default;
+  const anahtar = new Request(url);
+  const eski = await cache.match(anahtar);
+  if (eski) return await eski.json();
+  const j = await getir(url);
+  await cache.put(anahtar, new Response(JSON.stringify(j), {
+    headers: { "content-type": "application/json", "cache-control": `public, max-age=${TAZE_SN}` },
+  }));
+  return j;
+}
+
+function sadelestir(ham) {
+  return (ham || [])
     .filter((u) => u.lat != null && u.lon != null && u.alt_baro !== "ground")
     .map((u) => ({
       hex: u.hex,
@@ -56,40 +68,45 @@ function adsbSadelestir(ham) {
       tip: u.t || null,
       lat: u.lat,
       lon: u.lon,
-      irt: typeof u.alt_baro === "number" ? Math.round(u.alt_baro * 0.3048) : null, // ft → m
-      hiz: u.gs != null ? Math.round(u.gs) : null,                                   // knot
+      irt: typeof u.alt_baro === "number" ? Math.round(u.alt_baro * 0.3048) : null,
+      hiz: u.gs != null ? Math.round(u.gs) : null,
       yon: u.track ?? null,
       askeri: Boolean(u.dbFlags & 1),
     }));
 }
 
-/* ---------- OpenSky (yedek, anonim) ---------- */
-async function openSkyKutu(la0, lo0, la1, lo1) {
-  const url = `https://opensky-network.org/api/states/all?lamin=${la0}&lomin=${lo0}&lamax=${la1}&lomax=${lo1}`;
-  const cache = caches.default;
-  const anahtar = new Request(url);
+async function adsbZinciri(daireler) {
+  const hatalar = [];
+  for (const k of KAYNAKLAR) {
+    try {
+      const harita = new Map();
+      for (let i = 0; i < daireler.length; i++) {
+        if (i) await bekle(1100); // airplanes.live: 1 istek/sn
+        const d = daireler[i];
+        const j = await onbellekliGetir(k.url(d.lat, d.lon, Math.min(250, Math.round(d.r))));
+        for (const u of sadelestir(j.ac)) harita.set(u.hex, u);
+      }
+      return { kaynak: k.ad, ucaklar: [...harita.values()] };
+    } catch (e) {
+      hatalar.push(`${k.ad}:${String(e.message || e).slice(0, 40)}`);
+    }
+  }
+  throw new Error(hatalar.join(" | "));
+}
 
-  const onbellek = await cache.match(anahtar);
-  const j = onbellek ? await onbellek.json() : await (async () => {
-    const c = await fetch(url, { headers: { "User-Agent": UA } });
-    if (!c.ok) throw new Error("opensky-" + c.status);
-    const t = await c.text();
-    await cache.put(anahtar, new Response(t, {
-      headers: { "content-type": "application/json", "cache-control": `public, max-age=${TAZE_SN}` },
-    }));
-    return JSON.parse(t);
-  })();
-
+async function openSky(daireler) {
+  const lats = daireler.map((d) => d.lat), lons = daireler.map((d) => d.lon);
+  const pay = Math.max(...daireler.map((d) => d.r)) / 60;
+  const url = `https://opensky-network.org/api/states/all?lamin=${(Math.min(...lats) - pay).toFixed(2)}&lomin=${(Math.min(...lons) - pay * 1.3).toFixed(2)}&lamax=${(Math.max(...lats) + pay).toFixed(2)}&lomax=${(Math.max(...lons) + pay * 1.3).toFixed(2)}`;
+  const j = await onbellekliGetir(url);
   return (j.states || [])
     .filter((s) => s[5] != null && s[6] != null && !s[8])
     .map((s) => ({
       hex: s[0],
       cs: (s[1] || "").trim() || s[0],
-      tescil: null,
-      tip: null,
-      lat: s[6],
-      lon: s[5],
-      irt: s[13] != null ? Math.round(s[13]) : s[7] != null ? Math.round(s[7]) : null, // metre
+      tescil: null, tip: null,
+      lat: s[6], lon: s[5],
+      irt: s[13] != null ? Math.round(s[13]) : s[7] != null ? Math.round(s[7]) : null,
       hiz: s[9] != null ? Math.round(s[9] * 1.944) : null,
       yon: s[10] ?? null,
       askeri: false,
@@ -97,66 +114,47 @@ async function openSkyKutu(la0, lo0, la1, lo1) {
     }));
 }
 
-/* ---------- son iyi veri ---------- */
-const bayatAnahtar = (etiket) => new Request(`https://mva-onbellek.local/bayat/${etiket}`);
-
-async function bayatOku(etiket) {
-  const c = await caches.default.match(bayatAnahtar(etiket));
+const bayatAnahtar = (e) => new Request(`https://mva.local/bayat/${e}`);
+const bayatOku = async (e) => {
+  const c = await caches.default.match(bayatAnahtar(e));
   return c ? await c.json() : null;
-}
-async function bayatYaz(etiket, veri) {
-  await caches.default.put(bayatAnahtar(etiket), new Response(JSON.stringify(veri), {
+};
+const bayatYaz = (e, v) =>
+  caches.default.put(bayatAnahtar(e), new Response(JSON.stringify(v), {
     headers: { "content-type": "application/json", "cache-control": `public, max-age=${BAYAT_SN}` },
   }));
-}
 
-/* ---------- uç nokta ---------- */
 export async function onRequestGet(context) {
   const { request, waitUntil } = context;
   const url = new URL(request.url);
   const bolgeAd = url.searchParams.get("bolge");
-  const daireler = BOLGE[bolgeAd] || [
-    { lat: sayi(url.searchParams.get("lat"), 39.0), lon: sayi(url.searchParams.get("lon"), 32.0), r: sayi(url.searchParams.get("r"), 200) },
-  ];
+  const daireler = BOLGE[bolgeAd] || [{
+    lat: sayi(url.searchParams.get("lat"), 38.5),
+    lon: sayi(url.searchParams.get("lon"), 27.0),
+    r: sayi(url.searchParams.get("r"), 200),
+  }];
   const etiket = bolgeAd || `${daireler[0].lat},${daireler[0].lon},${daireler[0].r}`;
+  const notlar = [];
 
-  // 1+2) adsb.lol — sırayla, aralarında nefes payı
   try {
-    const harita = new Map();
-    for (let i = 0; i < daireler.length; i++) {
-      if (i) await bekle(300);
-      const d = daireler[i];
-      for (const u of adsbSadelestir(await adsbNokta(d.lat, d.lon, d.r))) harita.set(u.hex, u);
-    }
-    const ucaklar = [...harita.values()];
-    const paket = { sayi: ucaklar.length, zaman: Date.now(), kaynak: "adsb.lol (ODbL)", ucaklar };
+    const { kaynak, ucaklar } = await adsbZinciri(daireler);
+    const paket = { sayi: ucaklar.length, zaman: Date.now(), kaynak, ucaklar };
     waitUntil(bayatYaz(etiket, paket));
     return Response.json(paket, { headers: { "cache-control": `public, max-age=${TAZE_SN}` } });
-  } catch (e) {
-    // 3) OpenSky yedeği
+  } catch (e1) {
+    notlar.push("adsb: " + String(e1.message || e1));
     try {
-      const lats = daireler.map((d) => d.lat), lons = daireler.map((d) => d.lon);
-      const pay = Math.max(...daireler.map((d) => d.r)) / 60; // nm → derece (kaba)
-      const ucaklar = await openSkyKutu(
-        (Math.min(...lats) - pay).toFixed(2), (Math.min(...lons) - pay * 1.3).toFixed(2),
-        (Math.max(...lats) + pay).toFixed(2), (Math.max(...lons) + pay * 1.3).toFixed(2)
-      );
-      const paket = { sayi: ucaklar.length, zaman: Date.now(), kaynak: "OpenSky (yedek)", not: "adsb.lol geçici olarak limitledi", ucaklar };
+      const ucaklar = await openSky(daireler);
+      const paket = { sayi: ucaklar.length, zaman: Date.now(), kaynak: "OpenSky (yedek)", notlar, ucaklar };
       waitUntil(bayatYaz(etiket, paket));
       return Response.json(paket, { headers: { "cache-control": `public, max-age=${TAZE_SN}` } });
     } catch (e2) {
-      // 4) son iyi veri
+      notlar.push("opensky: " + String(e2.message || e2));
       const eski = await bayatOku(etiket);
       if (eski) {
-        return Response.json(
-          { ...eski, bayat: true, yas_sn: Math.round((Date.now() - eski.zaman) / 1000), not: "Canlı kaynaklar şu an cevap vermiyor; son alınan görüntü gösteriliyor." },
-          { headers: { "cache-control": "no-store" } }
-        );
+        return Response.json({ ...eski, bayat: true, yas_sn: Math.round((Date.now() - eski.zaman) / 1000), notlar }, { headers: { "cache-control": "no-store" } });
       }
-      return Response.json(
-        { hata: "Uçuş verisi şu an alınamıyor.", ayrinti: `${e.message || e} / ${e2.message || e2}`, oneri: "Birkaç dakika sonra tekrar deneyin." },
-        { status: 503 }
-      );
+      return Response.json({ hata: "Tüm uçuş kaynakları şu an erişilemez.", notlar, oneri: "Birkaç dakika sonra tekrar deneyin." }, { status: 503 });
     }
   }
 }
