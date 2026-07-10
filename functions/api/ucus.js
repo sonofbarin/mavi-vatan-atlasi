@@ -3,7 +3,7 @@
 // Kaynak: adsb.lol — anahtar gerektirmez, ODbL lisanslı, filtrelenmemiş (her havayolu + genel havacılık)
 // Ziyaretçi hesap açmadan bunu görür. Kendi OpenSky hesabı olan kullanıcı tarayıcıdan doğrudan bağlanır.
 
-const UA = "MaviVatanAtlasi/1.0 (egitim amacli; iletisim: github.com/KULLANICI/mavi-vatan-atlasi)";
+const UA = "MaviVatanAtlasi/1.0 (egitim amacli; iletisim: github.com/sonofbarin/mavi-vatan-atlasi)";
 
 // Türkiye'yi kapsayan 3 daire (250 nm sınırı yüzünden)
 const TURKIYE = [
