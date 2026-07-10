@@ -50,6 +50,10 @@ def cek():
                 son = str(e)
                 print("   hata:", son, flush=True)
             time.sleep(20)
+    yol = os.path.join("public", "data", "adalar.geojson")
+    if os.path.exists(yol):
+        print(f"⚠ Overpass şu an cevap vermiyor ({son}) — depodaki mevcut adalar.geojson korunuyor.")
+        raise SystemExit(0)
     raise SystemExit("Overpass'tan veri alınamadı: " + str(son))
 
 
