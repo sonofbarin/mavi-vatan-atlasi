@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mavi Vatan Atlası — kurulum testi</title>
+<style>
+  :root{--bg:#071722;--bg2:#0d2231;--hat:#1d3b4d;--tr:#2dd4c8;--metin:#dbe7ee;--soluk:#7d97a6;--uyari:#e0a93f}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--metin);font:15px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:20px}
+  main{max-width:760px;margin:0 auto}
+  h1{font-size:20px;letter-spacing:2px;color:var(--tr);margin:0 0 4px}
+  p.alt{color:var(--soluk);margin:0 0 22px;font-size:13.5px}
+  section{background:var(--bg2);border:1px solid var(--hat);border-radius:12px;padding:14px 16px;margin-bottom:14px}
+  h2{font-size:15px;margin:0 0 10px}
+  button{background:var(--tr);color:#04222a;border:0;border-radius:8px;padding:9px 14px;font-weight:600;cursor:pointer;font-size:14px}
+  button.ikincil{background:transparent;color:var(--metin);border:1px solid var(--hat)}
+  button:active{transform:translateY(1px)}
+  input,select,textarea{width:100%;background:#08202e;border:1px solid var(--hat);color:var(--metin);border-radius:8px;padding:9px;font:inherit}
+  textarea{min-height:74px;resize:vertical}
+  pre{background:#061a26;border:1px solid var(--hat);border-radius:8px;padding:11px;overflow:auto;font-size:12.5px;max-height:280px;white-space:pre-wrap;word-break:break-word}
+  .satir{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:9px}
+  .rozet{font-size:11.5px;color:var(--soluk);border:1px solid var(--hat);border-radius:20px;padding:2px 9px}
+  footer{color:var(--soluk);font-size:12px;text-align:center;margin-top:22px}
+</style>
+</head>
+<body>
+<main>
+  <h1>MAVİ VATAN ATLASI</h1>
+  <p class="alt">Kurulum testi sayfası. Üç düğme de yeşil dönerse altyapı hazırdır; asıl atlas bunun üstüne kurulur.</p>
+
+  <section>
+    <h2>1 · Sunucu ayakta mı?</h2>
+    <div class="satir"><button onclick="ping()">/api/ping çağır</button></div>
+    <pre id="c1">—</pre>
+  </section>
+
+  <section>
+    <h2>2 · Uçuşlar (hesap gerekmez)</h2>
+    <div class="satir">
+      <button onclick="ucus('bolge=turkiye')">Türkiye'nin tamamı</button>
+      <button class="ikincil" onclick="ucus('lat=38.4&lon=26.9&r=120')">Ege (Sakız–Sisam)</button>
+    </div>
+    <pre id="c2">—</pre>
+    <span class="rozet">Veri: adsb.lol · ODbL 1.0 · her havayolu + genel havacılık</span>
+  </section>
+
+  <section>
+    <h2>3 · AI danışman</h2>
+    <div class="satir" style="align-items:center">
+      <select id="mod" style="width:auto">
+        <option value="tez">Türk Tezi Danışmanı (savunu)</option>
+        <option value="tarafsiz">Tarafsız anlatım</option>
+      </select>
+      <button onclick="ai()">Sor</button>
+    </div>
+    <textarea id="soru">Meis'in kıta sahanlığı üretip üretemeyeceğini hangi antlaşma ve içtihatlar belirler?</textarea>
+    <pre id="c3">—</pre>
+  </section>
+
+  <footer>Kaynaklar: OpenStreetMap (ODbL) · Natural Earth · VATSpy/ICAO FIR · adsb.lol (ODbL)</footer>
+</main>
+
+<script>
+const yaz = (id, v) => document.getElementById(id).textContent = typeof v === "string" ? v : JSON.stringify(v, null, 2);
+
+async function ping(){
+  yaz("c1","çağrılıyor…");
+  try{ yaz("c1", await (await fetch("/api/ping")).json()); }
+  catch(e){ yaz("c1","HATA: "+e.message); }
+}
+
+async function ucus(q){
+  yaz("c2","çağrılıyor…");
+  try{
+    const j = await (await fetch("/api/ucus?"+q)).json();
+    if(j.hata) return yaz("c2", j);
+    const ilk = j.ucaklar.slice(0,8).map(u=>`${(u.cs||"").padEnd(9)} ${String(u.tip||"?").padEnd(5)} ${u.irt??"-"} ft  ${u.hiz??"-"} kt${u.askeri?"  [askerî]":""}`).join("\n");
+    yaz("c2", `${j.sayi} uçak havada · kaynak: ${j.kaynak}\n\n${ilk}\n…`);
+  }catch(e){ yaz("c2","HATA: "+e.message); }
+}
+
+async function ai(){
+  yaz("c3","düşünüyor…");
+  try{
+    const r = await fetch("/api/ai",{method:"POST",headers:{"content-type":"application/json"},
+      body: JSON.stringify({ soru: document.getElementById("soru").value, mod: document.getElementById("mod").value })});
+    const j = await r.json();
+    yaz("c3", j.hata ? j : j.cevap);
+  }catch(e){ yaz("c3","HATA: "+e.message); }
+}
+</script>
+</body>
+</html>
