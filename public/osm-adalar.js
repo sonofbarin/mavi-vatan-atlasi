@@ -24,6 +24,31 @@
     : g.type === "MultiPolygon" ? g.coordinates.map((p) => p[0])
     : [];
 
+  
+  /* --- OSM tabanlı karasuları: eski statik kuşakların yerine geçer --- */
+  async function karasulari() {
+    try {
+      const r = await fetch("/data/tw.geojson", { cache: "force-cache" });
+      if (!r.ok) return;
+      const j = await r.json();
+      if (j.gr6_osm && j.gr6_osm.length && GEO.tw) {
+        GEO.tw.gr6 = j.gr6_osm;                     // Yunan 6 mil → tam ikame (anakara+2412 ada)
+        if (j.tr6_ege_osm && j.tr6_ege_osm.length) {
+          /* Türk kuşağı: Ege kesiti OSM'den; Akdeniz+Karadeniz 12 mil halkaları eski üretimden korunur */
+          const eskiTr = GEO.tw.trcur || [];
+          const egeDisi = eskiTr.filter(h => {
+            const x = h[0][0], y = h[0][1];
+            return !(x >= 19.0 && x <= 28.55 && y >= 33.9 && y <= 41.12);  // üreticiyle aynı Ege kutusu
+          });
+          GEO.tw.trcur = j.tr6_ege_osm.concat(egeDisi);
+        }
+        console.log(`Karasuları OSM sürümüne geçti: gr6=${j.gr6_osm.length} halka, tr=${(GEO.tw.trcur||[]).length} halka`);
+        bildir("Karasuları 2412 adayı kapsayacak şekilde yenilendi");
+        HARITA.yolYenile ? HARITA.yolYenile() : HARITA.iste();
+      }
+    } catch (e) { console.warn("tw.geojson:", e.message); }
+  }
+
   /* --- veri yükle --- */
   async function yukle() {
     try {
@@ -53,6 +78,8 @@
         bildir(`Gerçek ICAO FIR sınırları yüklendi (${FIR.alanlar.length} bölge) — Havacılık katmanından açın`);
       }
     } catch (e) {}
+
+    await karasulari();
 
     if (OSM.yuklendi || FIR.yuklendi) {
       katmanEkle();
