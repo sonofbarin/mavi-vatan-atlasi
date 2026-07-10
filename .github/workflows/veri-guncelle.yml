@@ -38,6 +38,8 @@ jobs:
           if git diff --staged --quiet; then
             echo "değişiklik yok"
           else
-            git commit -m "veri: adalar + FIR güncellendi ($(date -u +%Y-%m-%d))"
+            git commit -m "veri: adalar + FIR + karasuları güncellendi ($(date -u +%Y-%m-%d))"
+            # Koşu sırasında depoya başka commit düşmüş olabilir → önce çek, üstüne bindir
+            git pull --rebase origin main
             git push
           fi
