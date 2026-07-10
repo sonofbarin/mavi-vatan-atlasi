@@ -16,8 +16,14 @@ ISTENEN = {
 
 def main():
     print("→", KAYNAK, flush=True)
-    g = requests.get(KAYNAK, timeout=180,
-                     headers={"User-Agent": "MaviVatanAtlasi/1.0 (egitim)"}).json()
+    try:
+        g = requests.get(KAYNAK, timeout=180,
+                         headers={"User-Agent": "MaviVatanAtlasi/1.0 (egitim)"}).json()
+    except Exception as e:
+        if os.path.exists(os.path.join("public", "data", "fir.geojson")):
+            print(f"⚠ VATSpy'a ulaşılamadı ({e}) — mevcut fir.geojson korunuyor.")
+            raise SystemExit(0)
+        raise
 
     secilen = []
     for f in g["features"]:
