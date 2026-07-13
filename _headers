@@ -1,0 +1,9 @@
+# Cloudflare Pages başlıkları — veri dosyaları 1 gün önbelleklenir (aylık güncelleme yeterli)
+/data/*
+  Cache-Control: public, max-age=86400
+
+/rag.js
+  Cache-Control: public, max-age=3600
+
+/osm-adalar.js
+  Cache-Control: public, max-age=3600
