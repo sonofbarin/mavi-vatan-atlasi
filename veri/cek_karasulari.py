@@ -19,8 +19,12 @@ from shapely.ops import unary_union
 from shapely import affinity
 
 NM6 = 6 * 1.852 / 111.32
+NM12 = 12 * 1.852 / 111.32
 K = math.cos(math.radians(37.5))
 EGE = box(19.0, 33.9, 28.55, 41.12)              # v3 üretimindeki Ege kutusuyla aynı
+# Türk kıyısı bölge kutuları — Ege 6 mil, Karadeniz + Akdeniz 12 mil (2674 s.K. + 1982 BKK)
+KDZ = box(27.9, 41.1, 42.3, 43.4)                # Karadeniz (Rezovo→Sarp), belt kuzeye taşar
+AKD = box(28.30, 35.20, 36.60, 37.05)            # Akdeniz (Marmaris→Suriye sınırı), belt güneye taşar
 ONIKI = box(26.10, 35.15, 29.20, 37.50)
 MEIS = box(29.20, 35.90, 30.15, 36.45)
 TR_AD = ("Gökçeada", "İmroz", "Bozcaada", "Tenedos", "İmralı", "Marmara", "Avşa",
@@ -30,7 +34,7 @@ TR_AD = ("Gökçeada", "İmroz", "Bozcaada", "Tenedos", "İmralı", "Marmara", "
 NE_URL = "https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson"
 
 def anakaralar():
-    yol = "/tmp/ne10.geojson"
+    yol = os.environ.get("NE_CACHE", "/tmp/ne10.geojson")
     if not os.path.exists(yol):
         print("→ Natural Earth indiriliyor…", flush=True)
         urllib.request.urlretrieve(NE_URL, yol)
@@ -110,14 +114,17 @@ def main():
 
     print(f"aidiyet: TR={len(tr)}  GR={len(gr)}  ihtilaflı(kuşaksız)={atlanan}")
 
-    def tampon(geoms):
+    def tampon(geoms, nm=NM6):
         u = unary_union(geoms)
         s = affinity.scale(u, xfact=K, yfact=1, origin=(0, 0))
-        b = s.buffer(NM6, quad_segs=6)
+        b = s.buffer(nm, quad_segs=6)
         return affinity.scale(b, xfact=1 / K, yfact=1, origin=(0, 0))
 
     gr6 = tampon([GRana] + gr)                       # Yunan: anakara + tüm adaları, tam ikame
     tr6 = tampon([TRana] + tr).intersection(EGE)     # Türk: yalnız Ege kesiti (6 mil bölgesi)
+    # Karadeniz + Akdeniz: 12 mil kuşağı, gerçek kıyı çizgisinden (anakara + o bölgedeki tüm adalar)
+    tr12_kdz = tampon([TRana] + tr, NM12).intersection(KDZ)
+    tr12_akd = tampon([TRana] + tr, NM12).intersection(AKD)
 
     def halkalar(g, tol=0.0045):
         g = g.simplify(tol, preserve_topology=True)
@@ -132,14 +139,17 @@ def main():
 
     cikti = {
         "uretim": fc.get("uretim"),
-        "not": "OSM adaları + NE anakaralarından üretilmiş 6 mil kuşakları (geometrik yaklaşım; resmî esas hat değildir).",
+        "not": "OSM adaları + NE anakaralarından üretilmiş karasuları kuşakları (geometrik yaklaşım; resmî esas hat değildir). Ege 6, Karadeniz + Akdeniz 12 mil.",
         "gr6_osm": halkalar(gr6),
         "tr6_ege_osm": halkalar(tr6),
+        "tr12_kdz_osm": halkalar(tr12_kdz),
+        "tr12_akd_osm": halkalar(tr12_akd),
     }
     os.makedirs("public/data", exist_ok=True)
     with open("public/data/tw.geojson", "w", encoding="utf-8") as f:
         json.dump(cikti, f, ensure_ascii=False, separators=(",", ":"))
-    print(f"✓ gr6: {len(cikti['gr6_osm'])} halka · tr6(Ege): {len(cikti['tr6_ege_osm'])} halka")
+    print(f"✓ gr6: {len(cikti['gr6_osm'])} halka · tr6(Ege): {len(cikti['tr6_ege_osm'])} halka"
+          f" · tr12(KDZ): {len(cikti['tr12_kdz_osm'])} · tr12(AKD): {len(cikti['tr12_akd_osm'])}")
     print(f"✓ dosya: public/data/tw.geojson ({os.path.getsize('public/data/tw.geojson')/1024:.0f} KB)")
 
 if __name__ == "__main__":

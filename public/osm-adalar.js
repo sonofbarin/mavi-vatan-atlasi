@@ -50,11 +50,19 @@
       if (j.gr6_osm?.length && GEO.tw) {
         GEO.tw.gr6 = j.gr6_osm;
         if (j.tr6_ege_osm?.length) {
-          const egeDisi = (GEO.tw.trcur || []).filter((h) => {
-            const x = h[0][0], y = h[0][1];
-            return !(x >= 19.0 && x <= 28.55 && y >= 33.9 && y <= 41.12);
-          });
-          GEO.tw.trcur = j.tr6_ege_osm.concat(egeDisi);
+          // Ege 6 mil + Karadeniz/Akdeniz 12 mil — hepsi gerçek kıyı çizgisinden üretildi
+          const yeni = j.tr6_ege_osm.slice();
+          if (j.tr12_kdz_osm?.length) yeni.push(...j.tr12_kdz_osm);
+          if (j.tr12_akd_osm?.length) yeni.push(...j.tr12_akd_osm);
+          if (!j.tr12_kdz_osm?.length && !j.tr12_akd_osm?.length) {
+            // eski tw.geojson (12 mil kuşakları yok): kaba Ege-dışı halkaları koru
+            const egeDisi = (GEO.tw.trcur || []).filter((h) => {
+              const x = h[0][0], y = h[0][1];
+              return !(x >= 19.0 && x <= 28.55 && y >= 33.9 && y <= 41.12);
+            });
+            yeni.push(...egeDisi);
+          }
+          GEO.tw.trcur = yeni;
         }
         HARITA.yolYenile ? HARITA.yolYenile() : HARITA.iste();
       }
