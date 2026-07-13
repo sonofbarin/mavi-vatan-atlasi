@@ -1,0 +1,24 @@
+name: Testler (duman)
+
+on:
+  push:
+    branches: [ main ]        # main'e her gönderimde
+  pull_request:               # her pull request'te
+  workflow_dispatch:          # Actions sekmesinden elle çalıştır
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"   # jsdom 29 için Node 22.13+ gerekir
+          cache: "npm"
+
+      - name: Bağımlılıklar
+        run: npm ci
+
+      - name: Duman testleri (74)
+        run: npm test          # node arac/smoke_site.js public/index.html

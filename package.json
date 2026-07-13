@@ -1,0 +1,18 @@
+{
+  "name": "mavi-vatan-atlasi",
+  "version": "1.0.0",
+  "description": "Türkiye deniz yetki alanları eğitim atlası — test ve veri araçları altyapısı",
+  "private": true,
+  "license": "MIT",
+  "homepage": "https://mavi-vatan-atlasi.pages.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sonofbarin/mavi-vatan-atlasi.git"
+  },
+  "scripts": {
+    "test": "node arac/smoke_site.js public/index.html"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
+}

@@ -1,0 +1,3 @@
+# Node bağımlılıkları — depoya girmez, CI kendi kurar (npm ci)
+node_modules/
+npm-debug.log*
