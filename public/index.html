@@ -103,7 +103,7 @@ canvas#tuval.suruklerken{cursor:grabbing}
 .hk-bas{padding:10px 12px 6px;display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
 .hk-bas b{font-family:var(--baslik);letter-spacing:.8px;font-size:16px}
 .hk-kapa{background:none;border:none;color:var(--soluk);cursor:pointer;font-size:16px;line-height:1}
-.hk-govde{padding:0 12px 11px;font-size:13px;color:var(--metin)}
+.hk-govde{padding:0 12px 11px;font-size:13px;color:var(--metin);max-height:min(52vh,430px);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;overflow-wrap:anywhere}
 .hk-govde .rozet-dizi{margin:5px 0}
 .hk-detay{margin-top:8px;width:100%;text-align:center;background:var(--bg3);border:1px solid var(--hat);color:var(--tr);border-radius:8px;padding:6px;cursor:pointer}
 .katman-yigin li{list-style:none;padding:3px 0;border-bottom:1px dashed var(--hat);font-size:12.5px;display:flex;gap:7px;align-items:center}
@@ -293,7 +293,7 @@ html[data-theme="acik"] .kod-blok{background:#0f2230;color:#cfe9df}
   #temsili-not{display:none}
   #koordinat{display:none}
   #atif{bottom:112px}
-  #h-kart{left:8px!important;right:8px;top:auto!important;bottom:110px;width:auto}
+  #h-kart{left:8px!important;right:8px;top:auto!important;bottom:96px;width:auto;max-height:calc(100dvh - 150px)}
   #senaryo-kart{top:52px;left:8px;right:8px;width:auto;max-height:44%}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
