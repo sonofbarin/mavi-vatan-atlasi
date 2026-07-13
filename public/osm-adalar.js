@@ -90,13 +90,18 @@
   }
 
   /* ---------------- ÇİZİM: Path2D önbelleği ---------------- */
+  /* dünya → normalize Web Mercator karesi (0..1). nY, index.html'deki ly'nin
+     ws çarpansız hâliyle BİREBİR aynı olmalı — böylece dönüşüm izotrop kalır. */
+  const nx = (lon) => (lon + 180) / 360;
+  const nY = (lat) => { const r = lat * Math.PI / 180; return (1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2; };
+
   function yollariKur() {
     const sinif = { buyuk: new Path2D(), orta: new Path2D(), kucuk: new Path2D() };
     for (const a of OSM.adalar) {
       const hedef = a.p.alan >= 1.2 ? sinif.buyuk : a.p.alan >= 0.15 ? sinif.orta : sinif.kucuk;
       for (const h of a.h) {
-        hedef.moveTo(h[0][0], h[0][1]);
-        for (let i = 1; i < h.length; i++) hedef.lineTo(h[i][0], h[i][1]);
+        hedef.moveTo(nx(h[0][0]), nY(h[0][1]));
+        for (let i = 1; i < h.length; i++) hedef.lineTo(nx(h[i][0]), nY(h[i][1]));
         hedef.closePath();
       }
     }
@@ -122,17 +127,21 @@
     }
 
     if (OSM.yuklendi && YOL.hazir && KATMAN.g("osmada")) {
-      /* dünya→ekran doğrusal dönüşümü: iki sonda noktasından matris çıkar */
-      const [ax, ay] = HARITA.ekran(0, 0);
-      const [bx, by] = HARITA.ekran(1, 0);
-      const [cx, cy] = HARITA.ekran(0, 1);
+      /* normalize Mercator karesi → ekran: gerçek projeksiyonla birebir uyuşan izotrop matris.
+         (Eski afin matris lat'ı düz çizgiyle yaklaşıklıyordu → adalar enleme göre ~100px'e
+          varan sapmayla güneye kayıp kıyıdan kopuk "hayalet" bırakıyordu.) */
+      const [px0, py0] = HARITA.ekran(0, 0);    // nx=0.5, nY=0.5
+      const [px1]      = HARITA.ekran(90, 0);   // nx=0.75  → yatay ölçek
+      const [, py1]    = HARITA.ekran(0, 60);   // nY(60)   → dikey ölçek
+      const sx = (px1 - px0) / (nx(90) - nx(0));
+      const sy = (py1 - py0) / (nY(60) - nY(0));
       const tile = document.documentElement.dataset.tile;
       c.save();
-      c.setTransform(bx - ax, by - ay, cx - ax, cy - ay, ax, ay);
+      c.setTransform(sx, 0, 0, sy, px0 - sx * nx(0), py0 - sy * nY(0));
       const doldur = !tile || tile === "yok";
       const parti = (p) => {
         if (doldur) { c.fillStyle = "#33505e"; c.globalAlpha = 0.95; c.fill(p); c.globalAlpha = 1; }
-        c.strokeStyle = "rgba(120,190,205,.6)"; c.lineWidth = 1 / Math.abs(bx - ax); c.stroke(p);
+        c.strokeStyle = "rgba(120,190,205,.6)"; c.lineWidth = 1 / Math.abs(sx); c.stroke(p);
       };
       parti(YOL.buyuk);
       if (z > 6.2) parti(YOL.orta);
