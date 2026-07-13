@@ -135,9 +135,15 @@
       const [, py1]    = HARITA.ekran(0, 60);   // nY(60)   → dikey ölçek
       const sx = (px1 - px0) / (nx(90) - nx(0));
       const sy = (py1 - py0) / (nY(60) - nY(0));
+      /* Ana harita ctx'i dpr ile ölçekli çizer (ciz(): setTransform(dpr,..)); ama
+         ekran() CSS-piksel döndürür. setTransform mutlak olduğu için matrisi dpr ile
+         çarpmazsak yüksek-DPI ekranlarda (Windows %125+, retina) adalar yarı ölçek/
+         kaymış "HAYALET" olur — dpr=1'de fark yoktur, o yüzden gözden kaçar.
+         dpr'yi canvas'tan türet: cv.width(aygıt) / clientWidth(CSS) = harita ile birebir. */
+      const dpr = (c.canvas.width / c.canvas.clientWidth) || 1;
       const tile = document.documentElement.dataset.tile;
       c.save();
-      c.setTransform(sx, 0, 0, sy, px0 - sx * nx(0), py0 - sy * nY(0));
+      c.setTransform(sx * dpr, 0, 0, sy * dpr, (px0 - sx * nx(0)) * dpr, (py0 - sy * nY(0)) * dpr);
       const doldur = !tile || tile === "yok";
       const parti = (p) => {
         if (doldur) { c.fillStyle = "#33505e"; c.globalAlpha = 0.95; c.fill(p); c.globalAlpha = 1; }
