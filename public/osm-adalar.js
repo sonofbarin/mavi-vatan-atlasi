@@ -28,7 +28,7 @@
   /* ---------------- VERİ YÜKLEME ---------------- */
   async function yukle() {
     try {
-      const j = await (await fetch("/data/adalar.geojson", { cache: "force-cache" })).json();
+      const j = await (await fetch("/data/adalar.geojson?v=20260713b", { cache: "force-cache" })).json();
       OSM.adalar = j.features
         .map((f) => ({ p: f.properties, h: halkalariAl(f.geometry) }))
         .filter((a) => a.h.length)
@@ -40,13 +40,13 @@
     } catch (e) { console.warn("adalar.geojson:", e.message); }
 
     try {
-      const j = await (await fetch("/data/fir.geojson", { cache: "force-cache" })).json();
+      const j = await (await fetch("/data/fir.geojson?v=20260713b", { cache: "force-cache" })).json();
       FIR.alanlar = j.features.map((f) => ({ p: f.properties, h: halkalariAl(f.geometry) }));
       FIR.yuklendi = true;
     } catch (e) {}
 
     try {
-      const j = await (await fetch("/data/tw.geojson", { cache: "force-cache" })).json();
+      const j = await (await fetch("/data/tw.geojson?v=20260713b", { cache: "force-cache" })).json();
       if (j.gr6_osm?.length && GEO.tw) {
         GEO.tw.gr6 = j.gr6_osm;
         if (j.tr6_ege_osm?.length) {
@@ -283,9 +283,11 @@
     }).join("");
   }
 
-  function kart(a, px, py) {
+  function kart(a, px, py, clon, clat) {
     const p = a.p, yil = ZAMAN.yil;
-    const T = tarihce(p);
+    // Büyük ada (ör. Kıbrıs) iki egemenlik parçasına bölünmüşse, adanın merkezi değil
+    // TIKLANAN nokta egemenliği belirler — yoksa kuzeye tıklasan da merkez güneyde kalır.
+    const T = tarihce(clon != null ? { x: clon, y: clat } : p);
     const sv = HARITA.sovKod(T.tl, yil);
     const s = GEO.sov[sv];
     const kur = DATA.adalar.find((x) => x.ad === p.ad || (p.yerel && x.gr === p.yerel) || (p.el && x.gr === p.el));
@@ -338,7 +340,7 @@
       const aday = OSM.adalar.filter((a) =>
         lon >= a.k[0] - 0.002 && lon <= a.k[2] + 0.002 && lat >= a.k[1] - 0.002 && lat <= a.k[3] + 0.002);
       aday.sort((x, y) => x.p.alan - y.p.alan);
-      for (const a of aday) if (icinde(lon, lat, a.h)) { kart(a, px, py); return true; }
+      for (const a of aday) if (icinde(lon, lat, a.h)) { kart(a, px, py, lon, lat); return true; }
     }
     return _tikla(lon, lat, px, py);
   };
